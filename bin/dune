@@ -1,0 +1,4 @@
+(executable
+ (public_name L1terp)
+ (name main)
+ (libraries L1terp))
