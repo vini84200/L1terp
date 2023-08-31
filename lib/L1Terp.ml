@@ -40,14 +40,10 @@ type politipo = (int list) * tipo
            
 let rec ftv (tp:tipo) : int list =
   match tp with
-    TyInt  
-  | TyBool -> []
-  | TyFn(t1,t2)    
-  | TyEither(t1, t2)
-  | TyPair(t1,t2) ->  (ftv t1) @ (ftv t2)
-  | TyList(t)
-  | TyMaybe(t) -> (ftv t)
-  | TyVar n      -> [n]
+    TyInt        | TyBool                           -> []
+  | TyFn(t1,t2)  | TyEither(t1, t2) | TyPair(t1,t2) -> (ftv t1) @ (ftv t2)
+  | TyList(t)    | TyMaybe(t)                       -> (ftv t)
+  | TyVar n                                         -> [n]
 
 
                    
@@ -227,10 +223,10 @@ let rec appsubs (s:subst) (tp:tipo) : tipo =
   | TyPair   (t1,t2)  -> TyPair   (appsubs s t1, appsubs s t2) 
   | TyEither (t1,t2)  -> TyEither (appsubs s t1, appsubs s t2)
   | TyList   (t1)     -> TyList   (appsubs s t1)
-  | TyMaybe  (t1) -> TyMaybe  (appsubs s t1)
-  | TyVar  x        -> (match lookup s x with
-        None        -> TyVar x
-      | Some tp'    -> tp') 
+  | TyMaybe  (t1)     -> TyMaybe  (appsubs s t1)
+  | TyVar  x          -> (match lookup s x with
+        None          -> TyVar x
+      | Some tp'      -> tp') 
                          
   
 
