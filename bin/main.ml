@@ -478,6 +478,13 @@ type valor =
   | VPair  of valor * valor 
   | VClos  of ident * expr * renv
   | VRclos of ident * ident * expr * renv
+  | VNil 
+  | VNothing
+  | VJust  of valor
+  | VLeft of valor 
+  | VRight of valor 
+  | VList of valor * valor
+
 and
   renv = (ident * valor) list
    
@@ -558,6 +565,57 @@ let rec eval (renv:renv) (e:expr) : valor =
   | LetRec(f,x,e1,e2)  ->
       let renv'= update renv f (VRclos(f,x,e1,renv))
       in eval renv' e2
+
+  | Pipe (e1, e2) -> 
+    let v1 = eval renv e1 in 
+    let close = eval renv e2 in 
+      (match close with
+         VClos(x,ebdy,renv') ->
+           let renv'' = update renv' x v1
+           in eval renv'' ebdy
+
+       | VRclos(f,x,ebdy,renv') ->
+           let renv''  = update renv' x v1 in
+           let renv''' = update renv'' f close
+           in eval renv''' ebdy
+       | _ -> raise BugTypeInfer)
+  | Nil -> VNil 
+  | ListConst (e1, e2) -> 
+      let v1 = eval renv e1 in
+      let v2 = eval renv e2 in
+      VList( v1, v2 )
+  | MatchList (e1, e2, x, xs, e3) -> 
+      let v1 = eval renv e1 in
+      (match v1 with
+      | VNil -> eval renv e2
+      | VList(v, vs) -> eval (update (update renv x v) xs vs) e3
+      | _ -> raise BugTypeInfer )
+  | Nothing -> VNothing
+  | Just (e) -> 
+      let v1 = eval renv e in
+      VJust(v1)
+  | MatchMaybe (e1, e2, x, e3) -> 
+      let v1 = eval renv e1 in
+      (match v1 with
+      | VNothing -> eval renv e2
+      | VJust (v) -> eval (update renv x v) e3
+      | _ -> raise BugTypeInfer )
+  | Left (e) -> VLeft(eval renv e)
+  | Right (e) -> VRight (eval renv e)
+  | MatchEither (e1, x, e2, y, e3) ->
+      let v1 = eval renv e1 in
+      (match v1 with
+      | VLeft (v) -> eval (update renv x v) e2
+      | VRight (v) -> eval (update renv y v) e3
+      | _ -> raise BugTypeInfer )
+
+
+
+      
+
+
+
+
        
         
 
