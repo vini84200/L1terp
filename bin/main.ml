@@ -398,12 +398,42 @@ let rec collect (g:tyenv) (e:expr) : (equacoes_tipo * tipo)  =
       let (c1, tp1) =  collect g e1 in
       let (c2, tp2) = collect g e2 in 
       (c1 @ c2 @ [(tp2, TyList tp1)], tp2)
-  (* | MatchList (e1, e2, x, xs, e3) -> 
+  | MatchList (e1, e2, x, xs, e3) -> 
       let (c1, tp1) = collect g  e1 in
       let (c2, tp2) = collect g e2 in
       let xNew      = TyVar (newvar()) in
       let g'        = (x,([], xNew))::(xs, ([], tp1)):: g in
-      let (c3, tp3) =   *)
+      let (c3, tp3) = collect g' e3 in
+      (c1@c2@c3@[(tp1, TyList(xNew)); (tp2, tp3)], tp2)
+
+  | Nothing -> ([], TyVar(newvar()))
+  | Just (e) -> 
+    let (c1, tp1) = collect g e in 
+    (c1, TyMaybe(tp1))
+  | MatchMaybe (e1, e2, x, e3) -> 
+      let (c1, tp1) = collect g  e1 in
+      let (c2, tp2) = collect g e2 in
+      let xNew = TyVar(newvar()) in 
+      let g' = (x, ([], xNew))::g in 
+      let (c3, tp3) = collect g' e3 in 
+      (c1@c2@c3@[(tp1, TyMaybe(xNew)); (tp2, tp3)], tp2)
+  | Left (e) -> 
+      let (c, tp) = collect g e in 
+      let xNew = TyVar(newvar()) in 
+      (c, TyEither(tp, xNew))
+  | Right (e) -> 
+      let (c, tp) = collect g e in 
+      let xNew = TyVar(newvar()) in 
+      (c, TyEither(xNew, tp))
+  | MatchEither (e1, x, e2, y, e3) -> 
+      let (c1, tp1) = collect g  e1 in
+      let xNew = TyVar(newvar()) in 
+      let yNew = TyVar(newvar()) in 
+      let gx = (x, ([], xNew))::g in 
+      let (c2, tp2) = collect gx e2 in 
+      let gy = (y, ([], yNew))::g in 
+      let (c3, tp3) = collect gy e3 in 
+      (c1@c2@c3@[(tp1, TyEither(xNew, yNew)); (tp2, tp3)], tp2)
 
 (* INFERÊNCIA DE TIPOS - CHAMADA PRINCIPAL *)
        
