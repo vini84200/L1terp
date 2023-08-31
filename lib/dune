@@ -1,2 +1,5 @@
 (library
- (name L1terp))
+ (inline_tests)
+ (preprocess (pps ppx_inline_test))
+ (name L1terp)
+ )
