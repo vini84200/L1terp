@@ -1,4 +1,0 @@
-(lang dune 3.10)
-(name L1terp)
-(sections (lib .) (bin ../../bin))
-(files (lib (META dune-package opam)) (bin (L1terp)))

@@ -27,7 +27,11 @@ type tipo =
   | TyBool
   | TyFn     of tipo * tipo
   | TyPair   of tipo * tipo 
+  | TyEither of tipo * tipo
+  | TyList   of tipo
+  | TyMaybe  of tipo
   | TyVar    of int   (* variáveis de tipo -- números *)
+
                       
 type politipo = (int list) * tipo
   
@@ -39,7 +43,10 @@ let rec ftv (tp:tipo) : int list =
     TyInt  
   | TyBool -> []
   | TyFn(t1,t2)    
+  | TyEither(t1, t2)
   | TyPair(t1,t2) ->  (ftv t1) @ (ftv t2)
+  | TyList(t)
+  | TyMaybe(t) -> (ftv t)
   | TyVar n      -> [n]
 
 
@@ -52,7 +59,11 @@ let rec tipo_str (tp:tipo) : string =
   | TyBool          -> "bool"      
   | TyFn   (t1,t2)  -> "("  ^ (tipo_str t1) ^ "->" ^ (tipo_str t2) ^ ")"
   | TyPair (t1,t2)  -> "("  ^ (tipo_str t1) ^  "*" ^ (tipo_str t2) ^ ")" 
+  | TyList (t) -> tipo_str t ^ " list"
+  | TyEither (t1, t2) -> "either " ^ tipo_str t1 ^ " " ^ tipo_str t2
+  | TyMaybe (t) -> "Maybe " ^ tipo_str t
   | TyVar  n        -> "X" ^ (string_of_int n)
+
                              
   
 
@@ -76,6 +87,16 @@ type expr  =
   | App    of expr * expr
   | Let    of ident * expr * expr           
   | LetRec of ident * ident * expr * expr 
+  | Pipe   of expr * expr
+  | Nil
+  | ListConst of expr * expr
+  | MatchList of expr * expr * ident * ident * expr
+  | Nothing 
+  | Just of expr 
+  | MatchMaybe of expr * expr * ident * expr 
+  | Left of expr
+  | Right of expr
+  | MatchEither of expr * ident * expr * ident * expr
               
 
 
@@ -110,6 +131,18 @@ let rec expr_str (e:expr) : string  =
                      ^ (expr_str e2) ^ " )"
   | LetRec (f,x,e1,e2) -> "(let rec " ^ f ^ "= fn " ^ x ^ " => "
                           ^ (expr_str e1) ^ "\nin " ^ (expr_str e2) ^ " )"
+  | Pipe (e1, e2) -> (expr_str e1) ^ "|>" ^ (expr_str e2)
+  | Nil -> "Nil"
+  | ListConst (e1, e2) -> (expr_str e1) ^ "::" ^ (expr_str e2)
+  | MatchList (e1, e2, x, xs, e3) -> "match " ^ (expr_str e1) ^
+      " with nil => " ^ (expr_str e2) ^ "| " ^ x ^ "::" ^ xs ^ " =>" ^
+      (expr_str e3)
+  | Nothing -> "nothing"
+  | Just (e) -> "Just " ^ expr_str e
+  | MatchMaybe (e1, e2, x, e3) -> "match " ^ expr_str e1 ^ " with nothing => " ^ expr_str e2 ^ " | just " ^ x ^ " => " ^ expr_str e3
+  | Left (e) -> "left " ^ expr_str e
+  | Right (e) -> "right " ^ expr_str e
+  | MatchEither (e1, x, e2, y, e3) -> "match " ^ expr_str e1 ^ "with left " ^ x ^ " => " ^ expr_str e2 ^ "| right " ^ y ^ " => " ^ expr_str e3
                           
 
          
@@ -189,9 +222,12 @@ let rec print_subst (s:subst) =
 let rec appsubs (s:subst) (tp:tipo) : tipo =
   match tp with
     TyInt             -> TyInt
-  | TyBool            -> TyBool      
+  | TyBool            -> TyBool
   | TyFn     (t1,t2)  -> TyFn     (appsubs s t1, appsubs s t2)
   | TyPair   (t1,t2)  -> TyPair   (appsubs s t1, appsubs s t2) 
+  | TyEither (t1,t2)  -> TyEither (appsubs s t1, appsubs s t2)
+  | TyList   (t1)     -> TyList   (appsubs s t1)
+  | TyMaybe  (t1) -> TyMaybe  (appsubs s t1)
   | TyVar  x        -> (match lookup s x with
         None        -> TyVar x
       | Some tp'    -> tp') 
@@ -220,6 +256,9 @@ let rec var_in_tipo (v:int) (tp:tipo) : bool =
   | TyBool            -> false      
   | TyFn     (t1,t2)  -> (var_in_tipo v t1) || (var_in_tipo v t2)
   | TyPair   (t1,t2)  -> (var_in_tipo v t1) || (var_in_tipo v t2) 
+  | TyEither (t1,t2)  -> (var_in_tipo v t1) || (var_in_tipo v t2)
+  | TyList   (t1)     -> (var_in_tipo v t1)
+  | TyMaybe  (t1)     -> (var_in_tipo v t1)
   | TyVar  x          -> v=x
                          
 
@@ -349,8 +388,22 @@ let rec collect (g:tyenv) (e:expr) : (equacoes_tipo * tipo)  =
 
       let (c2,tp2) = collect g' e2                          in
       (c1@[(tp1,TyVar tB)]@c2, tp2)
- 
-      
+  | Pipe (e1, e2) -> 
+       let (c1, tp1) = collect g e1 in
+       let (c2, tp2) = collect g e2 in 
+       let x = newvar() in
+       (c1 @ c2 @ [(tp2, TyFn(tp1,TyVar x))], TyVar x)
+  | Nil -> ([], TyVar(newvar()))
+  | ListConst (e1,e2) ->
+      let (c1, tp1) =  collect g e1 in
+      let (c2, tp2) = collect g e2 in 
+      (c1 @ c2 @ [(tp2, TyList tp1)], tp2)
+  (* | MatchList (e1, e2, x, xs, e3) -> 
+      let (c1, tp1) = collect g  e1 in
+      let (c2, tp2) = collect g e2 in
+      let xNew      = TyVar (newvar()) in
+      let g'        = (x,([], xNew))::(xs, ([], tp1)):: g in
+      let (c3, tp3) =   *)
 
 (* INFERÊNCIA DE TIPOS - CHAMADA PRINCIPAL *)
        

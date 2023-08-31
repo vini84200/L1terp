@@ -1,8 +1,0 @@
-lib: [
-  "_build/install/default/lib/L1terp/META"
-  "_build/install/default/lib/L1terp/dune-package"
-  "_build/install/default/lib/L1terp/opam"
-]
-bin: [
-  "_build/install/default/bin/L1terp"
-]
