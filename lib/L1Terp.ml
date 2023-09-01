@@ -612,13 +612,90 @@ let rec eval (renv:renv) (e:expr) : valor =
       | _ -> raise BugTypeInfer )
 
 exception ExecFail
+
+let check_type (e:expr) : bool =
+  try
+    let (c,tp) = collect [] e  in
+    let s      = unify c       in
+    let _     = appsubs s tp  in
+    true
+
+  with
+   
+  | CollectFail _   ->
+      false
+                     
+  | UnifyFail _ ->
+      false
+     
+     
+        (*===============================================*)
+
 let exec (e: expr) : valor  = 
-    match type_infer e with
+    match check_type e with
     | true -> (eval [] e)
     | false -> raise ExecFail
 
+
 let%test _ = exec (If (Bool(true), Left(Bool(false)), Right(Num(23)))) = VLeft(VBool(false))
-let%test _ = type_infer (If (Nil, Left(Bool(false)), Right(Num(23)))) = false
-let%test _ = type_infer (ListConst (Nothing, ListConst(Just (Bool(true)), Nil))) = true
-let%test _ = type_infer (ListConst (Nothing, ListConst(Just (Bool(true)), Nothing))) = false
-let%test _ = type_infer (Nil) = true
+let%test _ = check_type (If (Nil, Left(Bool(false)), Right(Num(23)))) = false
+let%test _ = check_type (ListConst (Nothing, ListConst(Just (Bool(true)), Nil))) = true
+let%test _ = check_type (ListConst (Nothing, ListConst(Just (Bool(true)), Nothing))) = false
+let%test _ = check_type (Nil) = (true)
+(* let%test _ = check_type () = () *)
+let%test _ = exec (Bool(true)) = VBool(true)
+let%test _ = exec (Bool(false)) = VBool(false)
+let%test _ = exec (Nil) = VNil
+let%test _ = exec (Nothing) = VNothing
+let%test _ = exec (Num(20)) = (VNum(20))
+let%test _ = exec (ListConst(Num(1), ListConst(Num(2), Nil))) = (VList(VNum(1), VList(VNum(2), VNil)))
+let%test _ = exec (Left(Bool(true))) = (VLeft(VBool(true)))
+let%test _ = exec (Right(Bool(false))) = (VRight(VBool(false)))
+let%test _ = exec (Just(Num(5))) = (VJust(VNum(5)))
+let%test _ = exec (Fst(Pair(Num(10), Bool(false)))) = (VNum(10))
+let%test _ = exec (Pair(Bool(true), Num(45))) = (VPair(VBool(true), VNum(45)))
+(* let%test _ = exec (Pair(Bool(true), Num(45))) = (VPair(VNum(45), VBool(true))) *)
+let%test _ = exec (If (Bool(true), Num(1), Num(2))) = (VNum(1))
+(* let%test _ = exec (If (Bool(true), Num(1), Num(2))) = (VNum(2)) *)
+let%test _ = exec (If (Bool(false), Num(1), Num(2))) = (VNum(2))
+(* let%test _ = exec (If (Bool(false), Num(1), Num(2))) = (VNum(1)) *)
+let%test _ = exec (Fst(Pair(Num(10), Num(20)))) = (VNum(10))
+(* let%test _ = exec (Fst(Pair(Num(10), Num(20)))) = (VNum(20)) *)
+let%test _ = exec (Snd(Pair(Num(10), Num(20)))) = (VNum(20))
+(* let%test _ = exec (Snd(Pair(Num(10), Num(20)))) = (VNum(10)) *)
+let%test _ = exec (Binop(Sum, Num(3), Num(5))) = (VNum(8))
+(* let%test _ = exec (Binop(Sum, Num(9), Num(10))) = (VNum(18)) *)
+let zera = Fn("x", Num(0))
+let%test _ = exec (App(zera, Num(5))) = (VNum(0))
+(* let%test _ = exec (app_zera) = (VNum(5)) *)
+let%test _ = exec (Pipe(Num(1), zera)) = (VNum(0))
+(* let%test _ = exec (Pipe(Num(1), zera)) = (VNum(1)) *)
+
+let sucessor = Fn("x", Binop(Sum, Var("x"), Num(1)))
+let%test _ = exec (App(sucessor, Num(10))) = (VNum(11))
+(* let%test _ = exec (App(sucessor, Num(10))) = (VNum(10)) *)
+let%test _ = exec (Pipe(Num(20), sucessor)) = (VNum(21))
+(* let%test _ = exec (Pipe(Num(20), sucessor)) = (VNum(20)) *)
+
+let antecessor = Fn("x", Binop(Sub, Var("x"), Num(1)))
+let%test _ = exec (App(antecessor, Num(10))) = (VNum(9))
+(* let%test _ = exec (App(antecessor, Num(10))) = (VNum(10)) *)
+let%test _ = exec (Pipe(Num(20), antecessor)) = (VNum(19))
+(* let%test _ = exec (Pipe(Num(20), antecessor)) = (VNum(20)) *)
+
+let x_50 = Let("x", Num(50), Var("x"))
+let x_49 = Let("x", x_50, App(antecessor, Var("x")))
+let%test _ = exec (x_49) = (VNum(49))
+let%test _ = exec (App(antecessor, x_49)) = (VNum(48))
+
+let lista1 = ListConst(Num(1), ListConst(Num(2), ListConst(Num(3), Nil)))
+let lista2 = Nil
+let lista3 = ListConst(Num(1), Nil)
+let match_list2 = MatchList(lista2, Bool(true), "x", "xs", Bool(false))
+let%test _ = exec (match_list2) = (VBool(true))
+(* let%test _ = exec (match_list2) = (VBool(false)) *)
+let match_list1 = MatchList(lista1, Bool(true), "x", "xs", Bool(false))
+let%test _ = exec (match_list1) = (VBool(false))
+(* let%test _ = exec (match_list1) = (VBool(true)) *)
+
+(* let%test _ = exec () = () *)
